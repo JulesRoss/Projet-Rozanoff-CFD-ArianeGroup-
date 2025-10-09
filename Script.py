@@ -41,8 +41,11 @@ g = 9.81
 delta = 0
 temp_moy_cl = 0
 temp_bulk = 0
+Tint= 273.15 ### Je suppose que c'est la température d'ébulition à la pression actuelle de la vapeur
 
-# Fonctions à utiliser
+##################### FONCTIONS #################################
+
+#################### COUCHE LIMITE ##############################
 
 # Quantité de mouvement intégrale pour la couche limite
 
@@ -74,5 +77,44 @@ eta_moy = lambda temp_moy_cl, temp_bulk, temp_paroi : (temp_moy_cl - temp_bulk)/
 
 eta_moy_d = lambda temp_moy_cl, temp_paroi, temp_bulk, eta_moy, delta, i : 0 if ((delta[i]- delta[i-1]/(hauteur/Nx)) >=0) else (((temp_moy_cl[i] - temp_moy_cl[i-1])/(h) - eta_moy*((temp_paroi[i]-temp_paroi[i-1])/h) + (1-eta_moy)*(temp_bulk[i]-temp_bulk[i-1])/h)/(temp_paroi[i]-temp_bulk[i]))
 
-dtemp_moy = lambda eta, rho, cv, temp_paroi, temp_bulk, i, m_point, m_point_y, enthalpie_moy, enthalpie_y, flux_entrant, delta : eta[i] * ((temp_paroi[i]-temp_paroi[i-1])/h) + (1-eta_moy)*((temp_bulk[i]-temp_bulk[i-1])/h) + (temp_paroi[i] - temp_bulk[i]) * ((eta[i]-eta[i-1])/h) if (((delta[i]-delta[i-1])/h) >= 0) else (enthalpie_moy[i]*m_point[i] - enthalpie_moy[i-1]*m_point[i-1] - m_point_y[i]* enthalpie_y[i] + 2*np.pi * rayon * (hauteur/Nx)*flux_entrant[i])/(2*np.pi*rayon*(hauteur/Nx)*rho*cv*delta[i])
+dtemp_moy = lambda eta, rho, cv, temp_paroi, temp_bulk, i, m_point, m_point_y, enthalpie_moy, enthalpie_y, flux_entrant, delta : eta[i] * ((temp_paroi[i]-temp_paroi[i-1])/h) + (1-eta[i])*((temp_bulk[i]-temp_bulk[i-1])/h) + (temp_paroi[i] - temp_bulk[i]) * ((eta[i]-eta[i-1])/h) if (((delta[i]-delta[i-1])/h) >= 0) else (enthalpie_moy[i]*m_point[i] - enthalpie_moy[i-1]*m_point[i-1] - m_point_y[i]* enthalpie_y[i] + 2*np.pi * rayon * (hauteur/Nx)*flux_entrant[i])/(2*np.pi*rayon*(hauteur/Nx)*rho*cv*delta[i])
+
+
+
+
+############################# BULK ############################
+
+
+bilan_masse = lambda mB,m_point_y, i : mB[i]-m_point_y
+
+#equation de conservation d'énergie
+
+d_temp_moy_Bulk = lambda lambdaB,R,eta, rho, cv, temp_bulk, i, m_point_B, m_point_y, enthalpie_y, enthalpie_B, flux_entrant, delta : (m_point_B[i]*enthalpie_B[i]-m_point_B[i-1]*enthalpie_B[i-1]-m_point_y[i]*enthalpie_y[i]+np.pi*(R-delta)**2*lambdaB*((temp_bulk[i]-temp_bulk[i-1])/(hauteur/Nx)-(temp_bulk[i-1]-temp_bulk[i-2])/(hauteur/Nx)))/(np.pi*rho*cv*(hauteur/Nx)*(R-delta[i])**2)
+
+
+
+
+############################### SURFACE #######################
+
+Rayleigh_v_int = lambda alpha_v, temp_vap, temp_int, D, nu_vapeur, a_vapeur : (g*alpha_v*(temp_vap-temp_int)*D**3)/(nu_vapeur*a_vapeur)
+
+Rayleigh_l_int = lambda alpha_l, temp_S, temp_int, D, nu_liquide, a_liquide : (g*alpha_l*(temp_int-temp_S)*D**3)/(nu_liquide*a_liquide)
+
+kv_int = lambda Ra_v_int, D,lambda_vapeur: 0.54*Ra_v_int**(1/4)*lambda_vapeur/D
+
+kv_liq = lambda Ra_l_int, D,lambda_liq: 0.27*Ra_l_int**(1/4)*lambda_liq/D
+
+
+
+
+
+
+
+
+
+######################### WALL #################################
+
+
+d_temp_mur = lambda qext, qin, delta_w, cw, lambdaw, T_wall , i, rho_w: (qext[i]-qin[i])/(delta_w*rho_w*cw) + lambdaw*(T_wall[i]-2*T_wall[i-1]-T_wall[i-2])/((hauteur/Nx)**2*rho_w*cw)
+
 
