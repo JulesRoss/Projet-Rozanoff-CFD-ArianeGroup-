@@ -24,7 +24,7 @@ def d_dx_upwind_bulk(arr, i, dx):
     if i == len(arr)-1:
         return (arr[i] - arr[i-1]) / dx
     else:
-        return (arr[i+1] - arr[i]) / dx
+        return (arr[i+1] - arr[i]) / dx # POUR LE BULK : on ne devrait pas plutôt avoir f(i-1) - f(i) pour prendre la valeur en dessous - la valeur actuelle ?
 
 
 # COUCHE LIMITE (mécanique/flux)
@@ -32,18 +32,18 @@ def d_dx_upwind_bulk(arr, i, dx):
 # Formules issues de l'article de Tsuji et Nagano, qui donne un modèle empirique à partir d'observations de flux convectifs
 
 # Vitesse caractéristique
-def Ub(g, beta, Tw, TB, nu):
+def Ub(g, beta, Tw, TB, nu): # PAS DANS L'ARTICLE
     return (g * beta * (abs(Tw - TB)) * nu) ** (1/3)
 
 # Nombre de Grashof
 
 
-def Grashof_x(g, beta, Tw, TB, x, nu):
+def Grashof_x(g, beta, Tw, TB, x, nu): # OK
     return (g * beta * (abs(Tw - TB)) * x**3) / (nu**2)
 
 
 # Contrainte pariétale en régime laminaire avec Gr<10^9
-def tau_w_lam(rho, ub, g, beta, Tw, TB, x, nu):
+def tau_w_lam(rho, ub, g, beta, Tw, TB, x, nu): # PAS DANS L'ARTICLE
     Grx = Grashof_x(g, beta, Tw, TB, x, nu)
     return rho * (ub**2) * 0.953 * (Grx ** (1/12))
 
@@ -57,24 +57,24 @@ def tau_w_turb(rho, ub, g, beta, Tw, TB, x, nu):
 # Equation 18
 
 
-def Rayleigh_x(g, alpha, Tw, TB, x, nu, a):
+def Rayleigh_x(g, alpha, Tw, TB, x, nu, a): # OK
     return (g * alpha * (abs(Tw - TB)) * x**3) / (nu * a)
 
 # Equation 17
 
 
-def k_nat_1e5_1e9(Rax, lambda_l, x):
+def k_nat_1e5_1e9(Rax, lambda_l, x): # OK
     return 0.59 * (Rax ** 0.25) * (lambda_l / clamp_den(x))
 
 
-def k_nat_1e9_1e13(Rax, lambda_l, x):
+def k_nat_1e9_1e13(Rax, lambda_l, x): # OK
     """k pour 1e9 < Ra < 1e13 : Nu = 0.11 Ra^(1/3)."""
     return 0.11 * (Rax ** (1/3)) * (lambda_l / clamp_den(x))
 
 
 # Equation 16
 
-def q_in_wall(Tw, TB, Rax, x, lambda_l):
+def q_in_wall(Tw, TB, Rax, x, lambda_l): # OK
     dT = (Tw - TB)
     if 1e5 < Rax <= 1e9:
         k = k_nat_1e5_1e9(Rax, lambda_l, x)
@@ -87,12 +87,12 @@ def q_in_wall(Tw, TB, Rax, x, lambda_l):
 # Valeurs déterminées grâce à des lois empirique peut être que des valeurs tabulées seraient meilleures
 
 
-def k_propane_liq(T):
+def k_propane_liq(T): # PAS DANS L'ARTICLE
     """Conductivité thermique [W/m/K] du propane liquide (230–320 K)."""
     return max(0.146 - 1.8e-4 * T, 0.05)
 
 
-def k_propane_vap(T):
+def k_propane_vap(T): # PAS DANS L'ARTICLE
     """Conductivité thermique [W/m/K] du propane vapeur (250–350 K)."""
     return 7.2e-3+3.5e-5*T
 
@@ -100,14 +100,14 @@ def k_propane_vap(T):
 
 
 # Equation 19
-def eta_moy(T_tilde, TB, Tw):
+def eta_moy(T_tilde, TB, Tw): # OK
     """η = (T̃ - TB)/(Tw - TB)."""
     return (T_tilde - TB) / clamp_den(Tw - TB)
 
 # Equation 20
 
 
-def d_eta_dt(i, dTtilde_dt, dTw_dt, dTB_dt, Tw, TB, eta_i, ddelta_dt):
+def d_eta_dt(i, dTtilde_dt, dTw_dt, dTB_dt, Tw, TB, eta_i, ddelta_dt): # OK
     """
     dη_i/dt — si dδ/dt >= 0 : 0
              sinon : ( dT̃/dt - η dTw/dt + (1-η) dTB/dt ) / (Tw - TB)
@@ -122,13 +122,13 @@ def d_eta_dt(i, dTtilde_dt, dTw_dt, dTB_dt, Tw, TB, eta_i, ddelta_dt):
 
 # Equation 21
 
-def dTtilde_dt(i, eta, dTw_dt, dTB_dt,
+def dTtilde_dt(i, eta, dTw_dt, dTB_dt, # OK
                Tw, TB,
                ddelta_dt,
                m_dot, m_dot_y, h_tilde, h_y,
                q_in_i, R, Hcv, rho, cv, delta_i):
     if ddelta_dt >= 0.0:
-        return eta[i] * dTw_dt + (1.0 - eta[i]) * dTB_dt
+        return eta[i] * dTw_dt + (1.0 - eta[i]) * dTB_dt + ((T))
 
     num = (m_dot[i] * h_tilde[i]
            - m_dot[i-1] * h_tilde[i-1]
@@ -141,7 +141,7 @@ def dTtilde_dt(i, eta, dTw_dt, dTB_dt,
 # Equation 15
 
 
-def ddelta_dt_from_energy(i,
+def ddelta_dt_from_energy(i,                         # OK
                           dTtilde_dt_i,                # valeur scalaire déjà calculée
                           m_dot, m_dot_y, h_tilde, h_y,
                           q_in_i, R, Hcv, rho, cv,
@@ -652,3 +652,4 @@ plt.title("Évolution de la température de surface")
 plt.grid(True)
 plt.legend()
 plt.show()
+
