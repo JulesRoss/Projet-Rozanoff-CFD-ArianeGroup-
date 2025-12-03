@@ -228,20 +228,20 @@ def k_l_int(Ra_l_int, D, lambda_l):
 # Equation 31
 
 
-def m_dot_phase(R, gamma, Tv, Ts, Tint, k_v_int_val, k_l_int_val):
+def m_dot_phase(R, gamma, Tv, Ts, Tint, k_v_int_val, k_l_int_val):  # OK
     return np.pi * R**2 * (k_v_int_val * (Tv - Tint) - k_l_int_val * (Tint - Ts)) / clamp_den(gamma)
 
 
 # Equation 30
 
 
-def dHs_dt(m_dot_ph, rho_l, R):
+def dHs_dt(m_dot_ph, rho_l, R): # OK
     return m_dot_ph / (rho_l * np.pi * R**2)
 
 # Equation 29
 
 
-def dTs_dt_surface(n,
+def dTs_dt_surface(n,   # CE SERAIT BON ET L'ARTICLE AURAIT FAUX (DES COQUILLES DANS L'ARTICLE)
                    m_dot_B, h_B,           # tableaux sur x
                    m_dot, h_tilde,         # CL en haut (ṁ_n, h̃_n)
                    R, H_s, qin_s,          # géométrie/surface & flux paroi -> surface
@@ -323,7 +323,7 @@ def dP_dt(Tv, m_dot_ph, Vv, Pv, dTv_dt_val, r_spec, rho_l):
 # Equation 36
 # On adapte l'équation 36 pour les différents murs que l'on considère, étant donné que pour le terme de conduction il y a une dépendance des murs adjacents
 
-def dTw_dt_liq(i, qext_i, qin_i, delta_w, c_w, lambda_w, Tw, rho_w, dx):
+def dTw_dt_liq(i, qext_i, qin_i, delta_w, c_w, lambda_w, Tw, rho_w, dx): # DEVRAIT ÊTRE BON (Question pour Alex)
     if i == 0:
         lap = (Tw[1] - Tw[0]) / (dx**2)       # bord bas (simple unilatéral)
     elif i == len(Tw) - 1:
@@ -334,16 +334,16 @@ def dTw_dt_liq(i, qext_i, qin_i, delta_w, c_w, lambda_w, Tw, rho_w, dx):
 
 
 def dTw_dt_vap(qext_vap, qin_vap, delta_w, c_w, lambda_w,
-               Tw_vap, Tw_int, rho_w, H_vap):
+               Tw_vap, Tw_int, rho_w, H_vap):    
     return ((qext_vap - qin_vap) / clamp_den(delta_w * rho_w * c_w)
-            + lambda_w * (Tw_vap - Tw_int) / clamp_den(H_vap**2 * rho_w * c_w))
+            + lambda_w * (Tw_vap - Tw_int) / clamp_den(H_vap**2 * rho_w * c_w)) # PROBLEME DE SIGNE --> (Tw_int - Tw-vap)
 
 
 def dTw_dt_surface(qext_s, qin_s, delta_w, c_w, lambda_w,
                    Tw_liq, rho_w, Tw_S, Tw_vap, H_S):
     return ((qext_s - qin_s) / clamp_den(delta_w * rho_w * c_w)
-            + lambda_w * (Tw_S - Tw_liq - (Tw_vap - Tw_S))
-            / clamp_den(H_S**2 * rho_w * c_w))
+            + lambda_w * (Tw_S - Tw_liq - (Tw_vap - Tw_S)) # PROBLEME DE SIGNE ICI AUSSI, C'EST CENSE ETRE L'OPPOSE DE CE QU'IL Y A DANS LES PARENTHESES + CA DEVRAIT ÊTRE INTERFACE ET PAS VAP 
+            / clamp_den(H_S**2 * rho_w * c_w)) 
 
 
 # Débit massique CL – version “def”
@@ -359,7 +359,7 @@ def dm_dot_CL_dt(i, m_dot, rho, g, alpha_v, delta, T_tilde, TB,
 
     #  Dérivées spatiales discrètes (amont)
     if i == 0:
-        dm_dx = (m_dot[1] - m_dot[0]) / dx
+        dm_dx = (m_dot[1] - m_dot[0]) / dx # POTENTIELLES ERREURS SUR LE CALCUL DE LA VARIATION DE DEBIT (INDEXS et SENS PHYSIQUE)
         ddelta_dx = (delta[1] - delta[0]) / dx
     else:
         dm_dx = (m_dot[i] - m_dot[i-1]) / dx
@@ -652,4 +652,5 @@ plt.title("Évolution de la température de surface")
 plt.grid(True)
 plt.legend()
 plt.show()
+
 
