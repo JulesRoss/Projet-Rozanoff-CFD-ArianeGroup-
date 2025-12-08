@@ -241,7 +241,7 @@ def dHs_dt(m_dot_ph, rho_l, R): # OK
 # Equation 29
 
 
-def dTs_dt_surface(n,   # CE SERAIT BON ET L'ARTICLE AURAIT FAUX (DES COQUILLES DANS L'ARTICLE)
+def dTs_dt_surface(n,   
                    m_dot_B, h_B,           # tableaux sur x
                    m_dot, h_tilde,         # CL en haut (ṁ_n, h̃_n)
                    R, H_s, qin_s,          # géométrie/surface & flux paroi -> surface
@@ -334,15 +334,15 @@ def dTw_dt_liq(i, qext_i, qin_i, delta_w, c_w, lambda_w, Tw, rho_w, dx): # DEVRA
 
 
 def dTw_dt_vap(qext_vap, qin_vap, delta_w, c_w, lambda_w,
-               Tw_vap, Tw_int, rho_w, H_vap):    
+               Tw_vap, Tw_S, rho_w, H_vap):    
     return ((qext_vap - qin_vap) / clamp_den(delta_w * rho_w * c_w)
-            + lambda_w * (Tw_vap - Tw_int) / clamp_den(H_vap**2 * rho_w * c_w)) # PROBLEME DE SIGNE --> (Tw_int - Tw-vap)
+            + lambda_w * (-Tw_vap + Tw_S) / clamp_den(H_vap**2 * rho_w * c_w)) 
 
 
 def dTw_dt_surface(qext_s, qin_s, delta_w, c_w, lambda_w,
                    Tw_liq, rho_w, Tw_S, Tw_vap, H_S):
     return ((qext_s - qin_s) / clamp_den(delta_w * rho_w * c_w)
-            + lambda_w * (Tw_S - Tw_liq - (Tw_vap - Tw_S)) # PROBLEME DE SIGNE ICI AUSSI, C'EST CENSE ETRE L'OPPOSE DE CE QU'IL Y A DANS LES PARENTHESES + CA DEVRAIT ÊTRE INTERFACE ET PAS VAP 
+            + lambda_w * (-(Tw_S - Tw_liq) + (Tw_vap - Tw_S)) 
             / clamp_den(H_S**2 * rho_w * c_w)) 
 
 
@@ -652,5 +652,6 @@ plt.title("Évolution de la température de surface")
 plt.grid(True)
 plt.legend()
 plt.show()
+
 
 
