@@ -1,0 +1,281 @@
+import numpy as np
+
+# Fonctions
+
+def Rayleigh_x(g, alpha, Tw, TB, x, nu, a):
+    return (g * alpha * (abs(Tw - TB)) * x**3) / (nu * a)
+
+def k_nat_1e9_1e13(Rax, lambda_l, x):
+    """k pour 1e9 < Ra < 1e13 : Nu = 0.11 Ra^(1/3)."""
+    return 0.11 * (Rax ** (1/3)) * (lambda_l / x)
+
+def q_in_wall(Tw, TB, Rax, x, lambda_l):
+    dT = (Tw - TB)
+    k = k_nat_1e9_1e13(Rax, lambda_l, x)
+    return k * dT
+
+def Ub(m_point_CL,delta,rho_liq,R):
+    if delta==0:
+        return(0)
+    else:
+        return(m_point_CL/(2*np.pi*R*delta*rho_liq))
+
+def Grashof_x(g, beta, Tw, TB, x, nu):
+    return (g * beta * (abs(Tw - TB)) * x**3) / (nu**2)
+
+def tau_w_turb(rho, ub, g, beta, Tw, TB, x, nu):
+    Grx = Grashof_x(g, beta, Tw, TB, x, nu)
+    return rho * (ub**2) * 0.684 * (Grx ** (1/11.9))
+
+# Paramètres
+num_iterations = 1  # Nombre de pas de temps que l'on cherche à simuler #MODIF AG
+dt = 1e-2  # intervalle de temps choisi pour garantir la convergence et limiter le temps de calcul
+
+# Constantes du problèmes
+
+R = 0.2  # m
+hauteur = 0.6  # m
+delta_w = 0.07  # m
+Nx = 30  # Nombre de divisions de la partie fluide
+M = 0.0441      # kg/mol pour le propane
+r = 8.314 / M   # ≈ 188 J/kg/K
+g = 9.81  # m/s^-2
+
+
+pourcentage_remplissage = 0.85
+H_vap = hauteur*(1-pourcentage_remplissage)
+# hauteur de chaque couche de liquide
+dx = (hauteur*pourcentage_remplissage)/Nx
+Hs = dx
+Hcv = dx
+qext = 20
+gamma = 3.56*10**5
+Pref = 1.013*10**5  # Pa
+Tref = 291.47  # temperature initiale pour l'instant
+
+# Pour le liquide
+
+nu_liquide = 2.07e-7
+rho_liquide = 502.59
+lambda_liquide = 0.097
+cp_liquide = 2649.5
+cv_liquide = 1640.1
+alpha_v = 0.003
+a_liquide = 7.6e-8
+beta_liquide = 1.3*10**(-3)  # A MODIFIER
+
+# Pour la vapeur
+
+nu_vapeur = 4.64e-7
+rho_vapeur = 17.291
+lambda_vapeur = 0.018
+cp_vapeur = 1928.5
+cv_vapeur = cp_vapeur - r
+
+# Pour la paroi
+
+rho_w = 7930
+lambda_w = 15.24
+c_w = 500
+
+
+
+num_iterations = 1200# Nombre d'itérations
+dt = 1  # Pas de temps en secondes (2 secondes est stable ici)
+Ti = 291.47  # K
+Tw_vap = Ti  # K
+Tw_s = Ti   # K
+Tv = Ti   # K
+Ts = Ti  # K
+Tint = Ti   # K
+Pv = 800*10**3  # bar
+q_ext = 4000 # W/m^2
+Pr_liq = (nu_liquide * rho_liquide * cp_liquide) / lambda_liquide
+Nx=30
+
+# tableaux d'état
+
+temp_bulk = np.full(Nx, Ti)       # TB
+temp_moy_cl = np.full(Nx, Ti)       # T_tilde (T̃)
+delta = np.full(Nx, 0.001)     # épaisseur CL (évite division par 0)
+enthalpie_moy_CL = np.zeros(Nx)        # h̃ (à mettre à jour selon ton modèle)
+enthalpie_y = np.zeros(Nx)        # h_y (idem)
+enthalpie_B = np.zeros(Nx)        # h_B (idem)
+m_point_CL = np.zeros(Nx+1)          # ṁ_i dans la CL
+m_point_y = np.zeros(Nx)          # ṁ_vers_bulk (interface CL→bulk)
+m_point_B = np.zeros(Nx+1)          # ṁ dans le bulk
+Tw = np.full(Nx,Ti)       # température mur côté liquide
+
+dtemp_moy_cl = np.zeros(Nx)
+dTw = np.zeros(Nx)
+dm_CL = np.zeros(Nx+1)
+dTb = np.zeros(Nx)
+
+history_temp_bulk = []
+history_delta = []
+time_stamps = []
+
+# --- PRÉPARATION GÉOMÉTRIQUE DE LA PAROI ---
+# Surfaces et volumes pour une maille i de hauteur dx
+A_ext = 2 * np.pi * (R + delta_w) * dx    # Surface extérieure (reçoit le flux q_ext)
+A_int = 2 * np.pi * R * dx                # Surface intérieure (cède le flux au fluide)
+A_cross = np.pi * ((R + delta_w)**2 - R**2) # Section transversale du mur (pour la conduction)
+
+m_w_i = rho_w * A_cross * dx              # Masse d'un segment de mur
+capa_w_i = m_w_i * c_w                    # Capacité thermique d'un segment (J/K)
+
+
+# BOUCLE TEMPORELLE 
+for it in range(num_iterations):
+    Tw_new = np.copy(Tw)
+    q_conv_save = np.zeros(Nx)
+
+    # 1. BILAN THERMIQUE DE LA PAROI (Conduction + Convection)
+    for i in range(Nx):
+        x_i = dx/2.0 + i*dx
+
+        # Calcul du flux convectif cédé au fluide 
+        Rax_i = Rayleigh_x(g, beta_liquide, Tw[i], temp_bulk[i], x_i, nu_liquide, a_liquide)
+
+        q_conv_i = q_in_wall(Tw[i], temp_bulk[i], Rax_i, x_i, lambda_liquide)
+        q_conv_save[i] = q_conv_i
+
+        # Puissances en jeu 
+        P_ext = q_ext * A_ext     # Chauffage externe constant
+        P_conv = q_conv_i * A_int # Refroidissement par la couche limite
+
+        # Conduction thermique verticale avec les mailles de mur voisines
+        P_cond = 0
+        if i > 0:       # Flux venant du bas
+            P_cond += (lambda_w * A_cross / dx) * (Tw[i-1] - Tw[i])
+        if i < Nx - 1:  # Flux venant du haut
+            P_cond += (lambda_w * A_cross / dx) * (Tw[i+1] - Tw[i])
+
+        # Mise à jour de la température de la paroi
+        Tw_new[i] += (dt / capa_w_i) * (P_ext - P_conv + P_cond)
+
+    Tw = Tw_new
+
+   
+    # 2. RESOLUTION DE LA COUCHE LIMITE AVEC LA CORRELATION SEMI-EMPIRIQUE
+    for i in range(Nx):
+        x_i = dx/2.0 + i*dx
+        Gri = Grashof_x(g, beta_liquide, Tw[i], temp_bulk[i], x_i, nu_liquide)
+        Rai = Gri * Pr_liq
+
+        # Épaisseur de la couche limite via la corrélation
+        if Rai < 1e9:
+            delta[i] = 3.93 * x_i * ((0.952 + Pr_liq) / (max(Gri, 1e-10) * Pr_liq))**0.25
+        else:
+            delta[i] = 0.565 * x_i * ((1 + 0.494 * Pr_liq**(2/3))**0.1) / (max(Gri, 1e-10)**0.1 * Pr_liq**(8/15))
+
+        eps = 1
+        k = 0
+        temp_moy_cl[i] = temp_bulk[i] + 0.5
+
+        while eps > 0.0001:
+            temp_moy_cl[i] = max(temp_moy_cl[i], temp_bulk[i] + 1e-3)
+
+            # L'énergie entrant dans la CL est exactement la perte convective du mur
+            phi = q_conv_save[i] * A_int
+
+            term_flow = m_point_CL[i] * (cp_liquide * (temp_moy_cl[i-1] if i>0 else Ti) - cp_liquide * temp_bulk[i])
+            denom = cp_liquide * (temp_moy_cl[i] - temp_bulk[i])
+
+            if abs(denom) < 1e-6:
+                m_point_CL[i+1] = 0
+            else:
+                m_point_CL[i+1] = (phi + term_flow) / denom
+
+            u_i = Ub(0.5 * (m_point_CL[i+1] + m_point_CL[i]), delta[i], rho_liquide, R)
+            tau_i = tau_w_turb(rho_liquide, u_i, g, beta_liquide, Tw[i], temp_bulk[i], x_i, nu_liquide)
+
+            A_grad = (m_point_CL[i+1] - m_point_CL[i]) / dx
+
+            temp_new = temp_bulk[i] + tau_i / (rho_liquide * g * beta_liquide * delta[i])
+            temp_new += 3.25 * 0.5 * (m_point_CL[i+1] + m_point_CL[i]) * (2 * A_grad) / ((2 * np.pi * R * rho_liquide * delta[i])**2) / (g * beta_liquide)
+
+            eps = abs(temp_moy_cl[i] - temp_new)
+            omega = 0.05
+            ## On utilise une méthode de relaxation pour faciliter la convergence
+            temp_moy_cl[i] = (1 - omega) * temp_moy_cl[i] + omega * temp_new
+
+            k += 1
+            if k > 3000: break
+
+    # 3. ÉVOLUTION TEMPORELLE DU BULK
+    A_bulk = np.pi * R**2
+    M_bulk_i = rho_liquide * A_bulk * dx
+    capa_bulk_i = M_bulk_i * cp_liquide             # Capacité thermique d'une couche (J/K)
+    K_cond_bulk = lambda_liquide * A_bulk / dx      # Conductance thermique axiale (W/K)
+    
+    temp_bulk_new = np.copy(temp_bulk)
+
+    for i in range(Nx):
+        # --- A. Terme de conduction (ajouté) ---
+        P_cond_bulk = 0
+        if i > 0:       # Chaleur provenant de la couche inférieure (i-1)
+            P_cond_bulk += K_cond_bulk * (temp_bulk[i-1] - temp_bulk[i])
+        if i < Nx - 1:  # Chaleur provenant de la couche supérieure (i+1)
+            P_cond_bulk += K_cond_bulk * (temp_bulk[i+1] - temp_bulk[i])
+            
+        # Mise à jour de la température suite à la conduction
+        temp_bulk_new[i] += (dt / capa_bulk_i) * P_cond_bulk
+
+        # --- B. Terme d'advection par la couche limite (ton code initial) ---
+        if i < Nx - 1:
+            m_dot_down = m_point_CL[i+1]
+            temp_bulk_new[i] += (dt / M_bulk_i) * m_dot_down * (temp_bulk[i+1] - temp_bulk[i])
+        else: 
+            # Pour la couche la plus haute (i == Nx - 1)
+            m_dot_in = m_point_CL[Nx-1]
+            temp_bulk_new[i] += (dt / M_bulk_i) * m_dot_in * (temp_moy_cl[Nx-1] - temp_bulk[Nx-1])
+
+    temp_bulk = temp_bulk_new
+    # Affichage
+    if it % 200 == 0:
+        history_temp_bulk.append(np.copy(temp_bulk))
+        history_delta.append(np.copy(delta))
+        time_stamps.append(it * dt)
+
+## Plot des résultats
+import matplotlib.pyplot as plt
+
+# Hauteur réelle du liquide simulé
+H_liq = hauteur * pourcentage_remplissage
+
+
+y_coords = np.linspace(dx/2, H_liq - dx/2, Nx)
+
+plt.figure(figsize=(8, 6))
+
+# Création d'un dégradé de couleurs (du bleu foncé pour t=0 au jaune pour t_final)
+import matplotlib.cm as cm
+colors = cm.viridis(np.linspace(0, 1, len(history_temp_bulk)))
+
+# Tracé de toutes les courbes sauvegardées
+for idx, (t_profile, time) in enumerate(zip(history_temp_bulk, time_stamps)):
+    plt.plot(t_profile, y_coords, color=colors[idx], label=f't = {time} s')
+
+plt.xlabel('Température du cœur du fluide ($T_{bulk}$) en K', fontsize=12)
+plt.ylabel('Hauteur depuis le fond (m)', fontsize=12)
+plt.title('Évolution temporelle de la stratification thermique', fontsize=14)
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left') # Légende à l'extérieur
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.tight_layout()
+plt.show()
+
+plt.figure(figsize=(8, 6))
+
+# Tracé de toutes les courbes d'épaisseur sauvegardées
+for idx, (d_profile, time) in enumerate(zip(history_delta, time_stamps)):
+    # On trace en multipliant par 1000 pour avoir des millimètres
+    plt.plot(d_profile * 1000, y_coords, color=colors[idx], label=f't = {time} s')
+
+plt.xlabel('Épaisseur de la couche limite delta (mm)', fontsize=12)
+plt.ylabel('Hauteur depuis le fond (m)', fontsize=12)
+plt.title('Évolution de l\'épaisseur de la couche limite dans le temps', fontsize=14)
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.tight_layout()
+plt.show()
