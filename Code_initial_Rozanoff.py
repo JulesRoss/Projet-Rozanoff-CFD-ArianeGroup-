@@ -1,4 +1,3 @@
-
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -24,7 +23,8 @@ def d_dx_upwind_bulk(arr, i, dx):
     if i == len(arr)-1:
         return (arr[i] - arr[i-1]) / dx
     else:
-        return (arr[i+1] - arr[i]) / dx # POUR LE BULK : on ne devrait pas plutôt avoir f(i-1) - f(i) pour prendre la valeur en dessous - la valeur actuelle ?
+        # POUR LE BULK : on ne devrait pas plutôt avoir f(i-1) - f(i) pour prendre la valeur en dessous - la valeur actuelle ?
+        return (arr[i+1] - arr[i]) / dx
 
 
 # COUCHE LIMITE (mécanique/flux)
@@ -32,18 +32,18 @@ def d_dx_upwind_bulk(arr, i, dx):
 # Formules issues de l'article de Tsuji et Nagano, qui donne un modèle empirique à partir d'observations de flux convectifs
 
 # Vitesse caractéristique
-def Ub(g, beta, Tw, TB, nu): # PAS DANS L'ARTICLE
+def Ub(g, beta, Tw, TB, nu):  # PAS DANS L'ARTICLE
     return (g * beta * (abs(Tw - TB)) * nu) ** (1/3)
 
 # Nombre de Grashof
 
 
-def Grashof_x(g, beta, Tw, TB, x, nu): # OK
+def Grashof_x(g, beta, Tw, TB, x, nu):  # OK
     return (g * beta * (abs(Tw - TB)) * x**3) / (nu**2)
 
 
 # Contrainte pariétale en régime laminaire avec Gr<10^9
-def tau_w_lam(rho, ub, g, beta, Tw, TB, x, nu): # PAS DANS L'ARTICLE
+def tau_w_lam(rho, ub, g, beta, Tw, TB, x, nu):  # PAS DANS L'ARTICLE
     Grx = Grashof_x(g, beta, Tw, TB, x, nu)
     return rho * (ub**2) * 0.953 * (Grx ** (1/12))
 
@@ -57,24 +57,24 @@ def tau_w_turb(rho, ub, g, beta, Tw, TB, x, nu):
 # Equation 18
 
 
-def Rayleigh_x(g, alpha, Tw, TB, x, nu, a): # OK
+def Rayleigh_x(g, alpha, Tw, TB, x, nu, a):  # OK
     return (g * alpha * (abs(Tw - TB)) * x**3) / (nu * a)
 
 # Equation 17
 
 
-def k_nat_1e5_1e9(Rax, lambda_l, x): # OK
+def k_nat_1e5_1e9(Rax, lambda_l, x):  # OK
     return 0.59 * (Rax ** 0.25) * (lambda_l / clamp_den(x))
 
 
-def k_nat_1e9_1e13(Rax, lambda_l, x): # OK
+def k_nat_1e9_1e13(Rax, lambda_l, x):  # OK
     """k pour 1e9 < Ra < 1e13 : Nu = 0.11 Ra^(1/3)."""
     return 0.11 * (Rax ** (1/3)) * (lambda_l / clamp_den(x))
 
 
 # Equation 16
 
-def q_in_wall(Tw, TB, Rax, x, lambda_l): # OK
+def q_in_wall(Tw, TB, Rax, x, lambda_l):  # OK
     dT = (Tw - TB)
     if 1e5 < Rax <= 1e9:
         k = k_nat_1e5_1e9(Rax, lambda_l, x)
@@ -87,12 +87,12 @@ def q_in_wall(Tw, TB, Rax, x, lambda_l): # OK
 # Valeurs déterminées grâce à des lois empirique peut être que des valeurs tabulées seraient meilleures
 
 
-def k_propane_liq(T): # PAS DANS L'ARTICLE
+def k_propane_liq(T):  # PAS DANS L'ARTICLE
     """Conductivité thermique [W/m/K] du propane liquide (230–320 K)."""
     return max(0.146 - 1.8e-4 * T, 0.05)
 
 
-def k_propane_vap(T): # PAS DANS L'ARTICLE
+def k_propane_vap(T):  # PAS DANS L'ARTICLE
     """Conductivité thermique [W/m/K] du propane vapeur (250–350 K)."""
     return 7.2e-3+3.5e-5*T
 
@@ -100,14 +100,14 @@ def k_propane_vap(T): # PAS DANS L'ARTICLE
 
 
 # Equation 19
-def eta_moy(T_tilde, TB, Tw): # OK
+def eta_moy(T_tilde, TB, Tw):  # OK
     """η = (T̃ - TB)/(Tw - TB)."""
     return (T_tilde - TB) / clamp_den(Tw - TB)
 
 # Equation 20
 
 
-def d_eta_dt(i, dTtilde_dt, dTw_dt, dTB_dt, Tw, TB, eta_i, ddelta_dt): # OK
+def d_eta_dt(i, dTtilde_dt, dTw_dt, dTB_dt, Tw, TB, eta_i, ddelta_dt):  # OK
     """
     dη_i/dt — si dδ/dt >= 0 : 0
              sinon : ( dT̃/dt - η dTw/dt + (1-η) dTB/dt ) / (Tw - TB)
@@ -122,13 +122,13 @@ def d_eta_dt(i, dTtilde_dt, dTw_dt, dTB_dt, Tw, TB, eta_i, ddelta_dt): # OK
 
 # Equation 21
 
-def dTtilde_dt(i, eta, dTw_dt, dTB_dt, # OK
+def dTtilde_dt(i, eta, dTw_dt, dTB_dt,  # OK
                Tw, TB,
                ddelta_dt,
                m_dot, m_dot_y, h_tilde, h_y,
                q_in_i, R, Hcv, rho, cv, delta_i):
     if ddelta_dt >= 0.0:
-        return eta[i] * dTw_dt + (1.0 - eta[i]) * dTB_dt + ((T))
+        return eta[i] * dTw_dt + (1.0 - eta[i]) * dTB_dt
 
     num = (m_dot[i] * h_tilde[i]
            - m_dot[i-1] * h_tilde[i-1]
@@ -235,13 +235,13 @@ def m_dot_phase(R, gamma, Tv, Ts, Tint, k_v_int_val, k_l_int_val):  # OK
 # Equation 30
 
 
-def dHs_dt(m_dot_ph, rho_l, R): # OK
+def dHs_dt(m_dot_ph, rho_l, R):  # OK
     return m_dot_ph / (rho_l * np.pi * R**2)
 
 # Equation 29
 
 
-def dTs_dt_surface(n,   
+def dTs_dt_surface(n,
                    m_dot_B, h_B,           # tableaux sur x
                    m_dot, h_tilde,         # CL en haut (ṁ_n, h̃_n)
                    R, H_s, qin_s,          # géométrie/surface & flux paroi -> surface
@@ -323,7 +323,8 @@ def dP_dt(Tv, m_dot_ph, Vv, Pv, dTv_dt_val, r_spec, rho_l):
 # Equation 36
 # On adapte l'équation 36 pour les différents murs que l'on considère, étant donné que pour le terme de conduction il y a une dépendance des murs adjacents
 
-def dTw_dt_liq(i, qext_i, qin_i, delta_w, c_w, lambda_w, Tw, rho_w, dx): # DEVRAIT ÊTRE BON (Question pour Alex)
+# DEVRAIT ÊTRE BON (Question pour Alex)
+def dTw_dt_liq(i, qext_i, qin_i, delta_w, c_w, lambda_w, Tw, rho_w, dx):
     if i == 0:
         lap = (Tw[1] - Tw[0]) / (dx**2)       # bord bas (simple unilatéral)
     elif i == len(Tw) - 1:
@@ -334,16 +335,16 @@ def dTw_dt_liq(i, qext_i, qin_i, delta_w, c_w, lambda_w, Tw, rho_w, dx): # DEVRA
 
 
 def dTw_dt_vap(qext_vap, qin_vap, delta_w, c_w, lambda_w,
-               Tw_vap, Tw_S, rho_w, H_vap):    
+               Tw_vap, Tw_S, rho_w, H_vap):
     return ((qext_vap - qin_vap) / clamp_den(delta_w * rho_w * c_w)
-            + lambda_w * (-Tw_vap + Tw_S) / clamp_den(H_vap**2 * rho_w * c_w)) 
+            + lambda_w * (-Tw_vap + Tw_S) / clamp_den(H_vap**2 * rho_w * c_w))
 
 
 def dTw_dt_surface(qext_s, qin_s, delta_w, c_w, lambda_w,
                    Tw_liq, rho_w, Tw_S, Tw_vap, H_S):
     return ((qext_s - qin_s) / clamp_den(delta_w * rho_w * c_w)
-            + lambda_w * (-(Tw_S - Tw_liq) + (Tw_vap - Tw_S)) 
-            / clamp_den(H_S**2 * rho_w * c_w)) 
+            + lambda_w * (-(Tw_S - Tw_liq) + (Tw_vap - Tw_S))
+            / clamp_den(H_S**2 * rho_w * c_w))
 
 
 # Débit massique CL – version “def”
@@ -359,7 +360,8 @@ def dm_dot_CL_dt(i, m_dot, rho, g, alpha_v, delta, T_tilde, TB,
 
     #  Dérivées spatiales discrètes (amont)
     if i == 0:
-        dm_dx = (m_dot[1] - m_dot[0]) / dx # POTENTIELLES ERREURS SUR LE CALCUL DE LA VARIATION DE DEBIT (INDEXS et SENS PHYSIQUE)
+        # POTENTIELLES ERREURS SUR LE CALCUL DE LA VARIATION DE DEBIT (INDEXS et SENS PHYSIQUE)
+        dm_dx = (m_dot[1] - m_dot[0]) / dx
         ddelta_dx = (delta[1] - delta[0]) / dx
     else:
         dm_dx = (m_dot[i] - m_dot[i-1]) / dx
@@ -652,6 +654,5 @@ plt.title("Évolution de la température de surface")
 plt.grid(True)
 plt.legend()
 plt.show()
-
 
 
