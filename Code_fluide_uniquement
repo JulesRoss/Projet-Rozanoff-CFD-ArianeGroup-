@@ -1,0 +1,231 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+
+
+#### FONCTIONS UTILES
+
+def Rayleigh_x(g, alpha, Tw, TB, x, nu, a):
+    return (g * alpha * max(abs(Tw - TB), 1e-6) * x**3) / (nu * a)
+
+def Ub(m_point_CL,delta,rho_liq,R):
+    if delta==0:
+        return(0)
+    else:
+        return(m_point_CL/(2*np.pi*R*delta*rho_liq))
+
+def Grashof_x(g, beta, Tw, TB, x, nu):
+    return (g * beta * (Tw-TB) * x**3) / (nu**2)
+
+def k_nat(Rax, lambda_l, x):
+    if Rax < 1e9: return 0.59 * (Rax ** 0.25) * lambda_l / x
+    return 0.11 * (Rax ** (1/3)) * lambda_l / x
+
+def tau_w_turb(rho, ub, g, beta, Tw, TB, x, nu):
+    Grx = Grashof_x(g, beta, Tw, TB, x, nu)
+    return rho * (ub**2) * 0.684 * (Grx ** (1/11.9))
+
+##### PARAMETRES
+Nx = 100
+q_ext = 2000
+temps_total = 1200 # secondes simulées
+dt = 0.2
+proportion_liquide = 1
+
+
+##### CONSTANTES
+R = 0.2; hauteur = 0.6; delta_w = 0.01
+g = 9.81
+H_liq_init = hauteur * proportion_liquide
+Nx = 50
+dx = H_liq_init / Nx
+num_iterations = int(temps_total/dt)
+
+
+# liquide
+rho_l = 1041.6; lam_l = 0.152; cp_l = 1695 ; cv_l=930.37 ;
+nu_l = 1.7e-7; beta_l = 0.00438; a_l = lam_l/(rho_l*cp_l); Pr_l = nu_l/a_l
+
+# mur
+rho_w = 2719; lam_w = 202.4; c_w = 871
+
+# surfaces utiles
+A_ext = 2*np.pi*(R+delta_w)*dx
+A_int = 2*np.pi*R*dx
+A_cross = np.pi*((R+delta_w)**2 - R**2)
+A_bulk = np.pi*R**2
+
+# propriétés thermiques associées
+m_w_i = rho_w * A_cross * dx
+capa_w_i = m_w_i * c_w
+M_bulk_i = rho_l * A_bulk * dx
+capa_bulk_i = M_bulk_i * cv_l
+K_cond_bulk = lam_l * A_bulk / dx
+
+
+#### INITIALISATION
+
+Ti = 90
+
+temp_bulk = np.full(Nx, float(Ti))
+temp_moy_cl = np.full(Nx, Ti + 0.1)
+Tw = np.full(Nx, float(Ti))
+m_point_CL = np.zeros(Nx+1)
+delta = np.full(Nx, 0.001)
+
+U_init = np.sum(M_bulk_i * cv_l * temp_bulk) + np.sum(m_w_i * c_w * Tw)
+energy_input_total = 0.0
+
+history_energy_error, history_temp_bulk, time_stamps = [], [], []
+
+
+#### Listes pour les plots
+
+history_temp_bulk = []
+history_delta = []
+history_m_dot     = []
+time_stamps = []
+
+
+# BOUCLE TEMPORELLE
+
+for it in range(num_iterations):
+
+    #### PAROI LIQUIDE ####
+    Tw_new = np.copy(Tw)
+    q_conv_save = np.zeros(Nx)
+    for i in range(Nx):
+        x_i = (i + 0.5) * dx
+        Ra_i = Rayleigh_x(g, beta_l, Tw[i], temp_bulk[i], x_i, nu_l, a_l)
+        q_conv_save[i] = k_nat(Ra_i, lam_l, x_i)* (Tw[i] - temp_bulk[i])
+
+        P_cond = (lam_w*A_cross/dx) * ((Tw[i-1]-Tw[i] if i>0 else 0) + (Tw[i+1]-Tw[i] if i<Nx-1 else 0))
+        Tw_new[i] += (dt/capa_w_i) * (q_ext * A_ext - q_conv_save[i] * A_int + P_cond)
+    Tw = Tw_new
+
+    #### COUCHE LIMITE ####
+    for i in range(Nx):
+        x_i = (i + 0.5) * dx
+        # Le Gri ne tombera plus jamais à zéro absolu grâce à la correction
+        Gri = Grashof_x(g, beta_l, Tw[i], temp_bulk[i], x_i, nu_l)
+        Rai = Gri * Pr_l
+
+        # Calcul de la taille de la couche limite via corrélation
+        if Rai < 1e9:
+            delta[i] = 3.93 * x_i * ((0.952 + Pr_l) / (Gri * Pr_l**2))**0.25
+        else:
+            delta[i] = 0.565 * x_i * ((1 + 0.494 * Pr_l**(2/3))**0.1) / (Gri**0.1 * Pr_l**(8/15))
+
+        # Initialisation de la boucle de convergence
+        eps = 1.0
+        k_iter = 0
+        temp_moy_cl[i] = temp_bulk[i] + max(Tw[i] - temp_bulk[i], 1e-3) * 0.5
+
+        # Boucle itérative : Énergie / Quantité de mouvement
+        while eps > 0.0001 and k_iter < 1000:
+            temp_moy_cl[i] = max(temp_moy_cl[i], temp_bulk[i] + 1e-4)
+
+            # 1 : Calcul du débit m_dot basé sur l'énergie
+            phi = q_conv_save[i] * A_int
+            T_cl_in = temp_moy_cl[i-1] if i > 0 else temp_bulk[0]
+            denom = cp_l * (temp_moy_cl[i] - temp_bulk[i])
+            m_point_CL[i+1] = (phi + m_point_CL[i] * cp_l* (T_cl_in - temp_bulk[i])) / denom if abs(denom) > 1e-6 else 0.0
+
+            # 2 : Calcul de la vitesse et du cisaillement
+            u_i = Ub(0.5 * (m_point_CL[i+1] + m_point_CL[i]), delta[i], rho_l, R)
+            tau_i = tau_w_turb(rho_l, u_i, g, beta_l, Tw[i], temp_bulk[i], x_i, nu_l)
+            A_grad = (m_point_CL[i+1] - m_point_CL[i]) / dx
+
+            # 3 : Nouvelle estimation de la température via bilan thermo-mécanique
+            temp_new = temp_bulk[i] + tau_i / (rho_l * g * beta_l * delta[i]) + \
+                       3.25 * 0.5 * (m_point_CL[i+1] + m_point_CL[i]) * (2 * A_grad) / ((2 * np.pi * R * rho_l * delta[i])**2) / (g * beta_l)
+
+            # Check convergence
+            eps = abs(temp_moy_cl[i] - temp_new)
+            temp_moy_cl[i] = 0.8 * temp_moy_cl[i] + 0.2 * temp_new # Relaxation
+            k_iter += 1
+
+    #### BULK ####
+    m_B = m_point_CL.copy()
+    temp_bulk_new = np.copy(temp_bulk)
+    for i in range(Nx):
+        # Flux Advectifs
+        H_top = m_B[i+1] * cp_l * (temp_bulk[i+1] if i < Nx-1 else temp_moy_cl[Nx-1])
+        H_bot = m_B[i] * cp_l * temp_bulk[i]
+
+        # Flux Latéral
+        m_y = -m_B[i] + m_B[i+1]
+        H_lat = m_y * cp_l * temp_bulk[i]
+
+        # Conduction
+        P_cond_b = K_cond_bulk * ((temp_bulk[i-1]-temp_bulk[i] if i>0 else 0) + (temp_bulk[i+1]-temp_bulk[i] if i<Nx-1 else 0))
+
+        temp_bulk_new[i] += (dt/capa_bulk_i) * (H_top - H_bot - H_lat + P_cond_b)
+    temp_bulk = temp_bulk_new
+
+
+    #### BILAN DE CONSERVATION D'ENERGIE ####
+    U_actuel = np.sum(M_bulk_i * cv_l * temp_bulk) + np.sum(m_w_i * c_w * Tw)
+    energy_input_total += (q_ext * A_ext * Nx) * dt
+    err_E = abs(((U_actuel - U_init) - energy_input_total))
+    err_E_rel = (err_E / max(energy_input_total, 1e-6)) * 100
+
+    if it % int(100/dt) == 0:
+        history_temp_bulk.append(np.copy(temp_bulk))
+        history_delta.append(np.copy(delta))
+        history_m_dot.append(np.copy(m_point_CL[1:]))
+        time_stamps.append(int(it*dt))
+        history_energy_error.append(err_E)
+        print(f"t={it*dt:4.0f}s | Err_E={err_E_rel:8.5f}%  | TB_haut={temp_bulk[-1]:.2f} K | TB_bas={temp_bulk[0]:.2f} K")
+
+
+
+
+#### PLOT ####
+
+y_coords = np.linspace(dx/2, H_liq_init-dx/2, Nx)
+colors   = cm.viridis(np.linspace(0, 1, len(history_temp_bulk)))
+
+# Stratification thermique
+plt.figure(figsize=(8,6))
+for idx, (t_profile, time) in enumerate(zip(history_temp_bulk, time_stamps)):
+    plt.plot(t_profile, y_coords, color=colors[idx], label=f't={time}s')
+plt.xlabel('Température bulk $T_B$ (K)', fontsize=12)
+plt.ylabel('Hauteur depuis le fond (m)', fontsize=12)
+plt.title('Stratification thermique', fontsize=12)
+plt.legend(bbox_to_anchor=(1.05,1), loc='upper left')
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.tight_layout()
+plt.show()
+
+# Épaisseur couche limite
+plt.figure(figsize=(8,6))
+for idx, (d_profile, time) in enumerate(zip(history_delta, time_stamps)):
+    plt.plot(d_profile*1000, y_coords, color=colors[idx], label=f't={time}s')
+plt.xlabel('Épaisseur delta (mm)', fontsize=12)
+plt.ylabel('Hauteur (m)', fontsize=12)
+plt.title("Épaisseur de la couche limite", fontsize=13)
+plt.legend(bbox_to_anchor=(1.05,1), loc='upper left')
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.tight_layout()
+plt.show()
+
+# Débit massique
+plt.figure(figsize=(8,6))
+for idx, (d_profile, time) in enumerate(zip(history_m_dot, time_stamps)):
+    plt.plot(d_profile, y_coords, color=colors[idx], label=f't={time}s')
+plt.xlabel('Débit massique (kg/s)', fontsize=12)
+plt.ylabel('Hauteur (m)', fontsize=12)
+plt.title("Débit dans la couche limite", fontsize=13)
+plt.legend(bbox_to_anchor=(1.05,1), loc='upper left')
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.tight_layout()
+plt.show()
+
+# Température en paroi
+plt.figure(figsize=(6,8))
+plt.plot(Tw, y_coords, 'r-', lw=2, label='Paroi liquide $T_w$')
+plt.xlabel('Température paroi (K)'); plt.ylabel('Hauteur (m)')
+plt.title('Profil de température du mur à $t_{final}$')
+plt.grid(True, linestyle='--', alpha=0.6); plt.legend()
+plt.xlim(min(Tw)-1, max(Tw)+1); plt.tight_layout(); plt.show()
