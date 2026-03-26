@@ -3,99 +3,124 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
 
-#### FONCTIONS UTILES
+# FONCTIONS UTILES
 
 def Rayleigh_x(g, alpha, Tw, TB, x, nu, a):
     return (g * alpha * (abs(Tw - TB)) * x**3) / (nu * a)
 
-def Ub(m_point_CL,delta,rho_liq,R):
-    if delta==0:
-        return(0)
+
+def Ub(m_point_CL, delta, rho_liq, R):
+    if delta == 0:
+        return (0)
     else:
-        return(m_point_CL/(2*np.pi*R*delta*rho_liq))
+        return (m_point_CL/(2*np.pi*R*delta*rho_liq))
+
 
 def Grashof_x(g, beta, Tw, TB, x, nu):
     return (g * beta * (abs(Tw - TB)) * x**3) / (nu**2)
 
+
 def Rayleigh_x(g, alpha, Tw, TB, x, nu, a):
     return (g * alpha * max(abs(Tw - TB), 1e-6) * x**3) / (nu * a)
 
+
 def k_nat(Rax, lambda_l, x):
-    if Rax < 1e9: return 0.59 * (Rax ** 0.25) * lambda_l / x
+    if Rax < 1e9:
+        return 0.59 * (Rax ** 0.25) * lambda_l / x
     return 0.11 * (Rax ** (1/3)) * lambda_l / x
+
 
 def tau_w_turb(rho, ub, g, beta, Tw, TB, x, nu):
     Grx = Grashof_x(g, beta, Tw, TB, x, nu)
     return rho * (ub**2) * 0.684 * (Grx ** (1/11.9))
+
+
 def q_in_wall(Tw, TB, Rax, x, lambda_l):
     return k_nat(Rax, lambda_l, x) * (Tw - TB)
 
 #### FONCTIONS INTERFACE VAPEUR-LIQUIDE  ####
+
 
 def compute_k_v_int(Tv, Tint, D, rho_v, cp_v, nu_v, lambda_v, g, beta):
     dT = abs(Tv - Tint)
     if dT < 1e-8:
         return 0.0
     a_v = lambda_v / (rho_v * cp_v)
-    Ra  = g * beta * dT * D**3 / (nu_v * a_v)
+    Ra = g * beta * dT * D**3 / (nu_v * a_v)
     return 0.54 * (max(Ra, 1e-10) ** 0.25) * lambda_v / D
+
 
 def compute_k_int_l(Tint, Ts, D, rho_l, cp_l, nu_l, lambda_l, g, beta):
     dT = abs(Tint - Ts)
     if dT < 1e-8:
         return 0.0
     a_l = lambda_l / (rho_l * cp_l)
-    Ra  = g * beta * dT * D**3 / (nu_l * a_l)
+    Ra = g * beta * dT * D**3 / (nu_l * a_l)
     return 0.27 * (max(Ra, 1e-10) ** 0.25) * lambda_l / D
+
 
 def saturation_temperature(P, Pref=800e3, Tref=291.47, gamma=3.56e5, r=188.5):
     val = 1.0/Tref - (r/gamma) * np.log(max(P, 1e3)/Pref)
     return 1.0/val if val > 0 else Tref
 
+
 def saturation_pressure(T, Pref=800e3, Tref=291.47, gamma=3.56e5, r=188.5):
     return Pref * np.exp((gamma/r) * (1.0/Tref - 1.0/T))
+
 
 def rho_v_sat(P, r=188.5):
     return P / (r * saturation_temperature(P))
 
-##### PARAMETRES
+
+# PARAMETRES
 Nx = 50
 q_ext = 2000
-temps_total=70 # secondes simulées
-dt = 0.02
-proportion_liquide=0.85
+temps_total = 1201  # secondes simulées
+dt = 0.1
+proportion_liquide = 0.85
 hauteur = 0.6
 H_liq_init = hauteur * proportion_liquide
 
 
-##### CONSTANTES
-R = 0.2; delta_w = 0.007
+# CONSTANTES
+R = 0.2
+delta_w = 0.007
 g = 9.81
 dx = H_liq_init / Nx
 num_iterations = int(temps_total/dt)
 
 
 # liquide
-rho_l = 502.59; lam_l = 0.097; cp_l = 2649.5 ; cv_l=1640.1 ;
-nu_l = 2.07e-7; beta_l = 1.3e-3; a_l = lam_l/(rho_l*cp_l); Pr_l = nu_l/a_l
+rho_l = 502.59
+lam_l = 0.097
+cp_l = 2649.5
+cv_l = 1640.1
+nu_l = 2.07e-7
+beta_l = 1.3e-3
+a_l = lam_l/(rho_l*cp_l)
+Pr_l = nu_l/a_l
 gamma_lat = 3.56e5    # J/kg
 
 # mur
-rho_w = 7930; lam_w = 15.24; c_w = 500
+rho_w = 7930
+lam_w = 15.24
+c_w = 500
 
 # vapeur
-nu_v  = 4.64e-7;  rho_v0 = 17.291;  lam_v = 0.018
-cp_v  = 1928.5;   cv_v   = 1533.9
-a_v0  = lam_v/(rho_v0*cp_v)
+nu_v = 4.64e-7
+rho_v0 = 17.291
+lam_v = 0.018
+cp_v = 1928.5
+cv_v = 1533.9
+a_v0 = lam_v/(rho_v0*cp_v)
 
 # surfaces utiles
 A_ext = 2*np.pi*(R+delta_w)*dx
 A_int = 2*np.pi*R*dx
 A_cross = np.pi*((R+delta_w)**2 - R**2)
 A_bulk = np.pi*R**2
-D_tank  = 2*R
-H_s   = dx    # hauteur du Surface CV
-
+D_tank = 2*R
+H_s = dx    # hauteur du Surface CV
 
 
 # propriétés thermiques associées
@@ -104,27 +129,26 @@ capa_w_i = m_w_i * c_w
 M_bulk_i = rho_l * A_bulk * dx
 capa_bulk_i = M_bulk_i * cv_l
 K_cond_bulk = lam_l * A_bulk / dx
-capa_surf   = (rho_l * A_bulk * H_s) * cp_l
+capa_surf = (rho_l * A_bulk * H_s) * cp_l
 
 
-#### INITIALISATION
+# INITIALISATION
 
 
 H_liq_init = hauteur * proportion_liquide
 H_vap_init = hauteur * (1 - proportion_liquide)
 Ti = 291.47
-Pv   = 800e3
-Tv   = saturation_temperature(Pv)   # = Ti = 291.47 K
-Ts   = Ti
+Pv = 800e3
+Tv = saturation_temperature(Pv)   # = Ti = 291.47 K
+Ts = Ti
 Tint = Ti
-Tw_vap=Ti
-
+Tw_vap = Ti
 
 
 H_vap = H_vap_init
-V_v   = A_bulk * H_vap
+V_v = A_bulk * H_vap
 rho_v = rho_v_sat(Pv)
-m_v   = rho_v * V_v
+m_v = rho_v * V_v
 
 
 temp_bulk = np.full(Nx, Ti)
@@ -139,23 +163,24 @@ energy_input_total = 0.0
 history_energy_error, history_temp_bulk, time_stamps = [], [], []
 
 
-#### Tableaux pour tracés
+# Tableaux pour tracés
 
 history_temp_bulk = []
-history_delta     = []
-history_Tv        = []
-history_Ts        = []
-history_Pv        = []
-history_m_dot     = []
-time_stamps       = []
+history_delta = []
+history_Tv = []
+history_Ts = []
+history_Pv = []
+history_m_dot = []
+time_stamps = []
 
 
-## Surface et capacité vapeur
+# Surface et capacité vapeur
 A_int_v_total = 2 * np.pi * R * H_vap          # Surface intérieure totale gaz
-A_ext_v_total = 2 * np.pi * (R + delta_w) * H_vap  # Surface extérieure totale gaz
+# Surface extérieure totale gaz
+A_ext_v_total = 2 * np.pi * (R + delta_w) * H_vap
 m_w_vap_total = rho_w * A_cross * H_vap        # Masse totale de la paroi gaz
-capa_wv_total = m_w_vap_total * c_w            # Capacité thermique totale paroi gaz
-
+# Capacité thermique totale paroi gaz
+capa_wv_total = m_w_vap_total * c_w
 
 
 #### INITIALISATION DU BILAN D'ÉNERGIE ####
@@ -180,10 +205,13 @@ for it in range(num_iterations):
     for i in range(Nx):
         x_i = (i + 0.5) * dx
         Ra_i = Rayleigh_x(g, beta_l, Tw[i], temp_bulk[i], x_i, nu_l, a_l)
-        q_conv_save[i] = k_nat(Ra_i, lam_l, x_i)* (Tw[i] - temp_bulk[i])
+        q_conv_save[i] = k_nat(Ra_i, lam_l, x_i) * (Tw[i] - temp_bulk[i])
 
-        P_cond = (lam_w*A_cross/dx) * ((Tw[i-1]-Tw[i] if i>0 else 0) + (Tw[i+1]-Tw[i] if i<Nx-1 else 0))
-        Tw_new[i] += (dt/capa_w_i) * (q_ext * A_ext - q_conv_save[i] * A_int + P_cond)
+        P_cond = (lam_w*A_cross/dx) * \
+            ((Tw[i-1]-Tw[i] if i > 0 else 0) +
+             (Tw[i+1]-Tw[i] if i < Nx-1 else 0))
+        Tw_new[i] += (dt/capa_w_i) * (q_ext * A_ext -
+                                      q_conv_save[i] * A_int + P_cond)
     Tw = Tw_new
 
     # PAROI VAPEUR
@@ -193,10 +221,10 @@ for it in range(num_iterations):
 
     # Corrélation de transfert paroi -> vapeur
     Ra_wv = Rayleigh_x(g, beta_v_loc, Tw_vap, Tv, x_mid_v, nu_v, a_v_loc)
-    h_wv  = k_nat(Ra_wv, lam_v, x_mid_v)
+    h_wv = k_nat(Ra_wv, lam_v, x_mid_v)
 
     # Bilans de puissance
-    P_ext_v  = q_ext * A_ext_v_total
+    P_ext_v = q_ext * A_ext_v_total
     P_conv_v = h_wv * A_int_v_total * (Tw_vap - Tv)
 
     # Conduction axiale avec le haut de la paroi liquide (Tw[-1])
@@ -217,7 +245,8 @@ for it in range(num_iterations):
         if Rai < 1e9:
             delta[i] = 3.93 * x_i * ((0.952 + Pr_l) / (Gri * Pr_l**2))**0.25
         else:
-            delta[i] = 0.565 * x_i * ((1 + 0.494 * Pr_l**(2/3))**0.1) / (Gri**0.1 * Pr_l**(8/15))
+            delta[i] = 0.565 * x_i * \
+                ((1 + 0.494 * Pr_l**(2/3))**0.1) / (Gri**0.1 * Pr_l**(8/15))
 
         # Initialisation de la boucle de convergence
         eps = 1.0
@@ -232,20 +261,25 @@ for it in range(num_iterations):
             phi = q_conv_save[i] * A_int
             T_cl_in = temp_moy_cl[i-1] if i > 0 else temp_bulk[0]
             denom = cp_l * (temp_moy_cl[i] - temp_bulk[i])
-            m_point_CL[i+1] = (phi + m_point_CL[i] * cp_l * (T_cl_in - temp_bulk[i])) / denom if abs(denom) > 1e-6 else 0.0
+            m_point_CL[i+1] = (phi + m_point_CL[i] * cp_l * (T_cl_in -
+                               temp_bulk[i])) / denom if abs(denom) > 1e-6 else 0.0
 
             # 2 : Calcul de la vitesse et du cisaillement
-            u_i = Ub(0.5 * (m_point_CL[i+1] + m_point_CL[i]), delta[i], rho_l, R)
-            tau_i = tau_w_turb(rho_l, u_i, g, beta_l, Tw[i], temp_bulk[i], x_i, nu_l)
+            u_i = Ub(0.5 * (m_point_CL[i+1] +
+                     m_point_CL[i]), delta[i], rho_l, R)
+            tau_i = tau_w_turb(rho_l, u_i, g, beta_l,
+                               Tw[i], temp_bulk[i], x_i, nu_l)
             A_grad = (m_point_CL[i+1] - m_point_CL[i]) / dx
 
             # 3 : Nouvelle estimation de la température via bilan thermo-mécanique
             temp_new = temp_bulk[i] + tau_i / (rho_l * g * beta_l * delta[i]) + \
-                       3.25 * 0.5 * (m_point_CL[i+1] + m_point_CL[i]) * (2 * A_grad) / ((2 * np.pi * R * rho_l * delta[i])**2) / (g * beta_l)
+                3.25 * 0.5 * (m_point_CL[i+1] + m_point_CL[i]) * (2 * A_grad) / (
+                    (2 * np.pi * R * rho_l * delta[i])**2) / (g * beta_l)
 
             # Check convergence
             eps = abs(temp_moy_cl[i] - temp_new)
-            temp_moy_cl[i] = 0.8 * temp_moy_cl[i] + 0.2 * temp_new # Relaxation
+            temp_moy_cl[i] = 0.8 * temp_moy_cl[i] + \
+                0.2 * temp_new  # Relaxation
             k_iter += 1
 
     #### BULK ####
@@ -261,36 +295,42 @@ for it in range(num_iterations):
         H_lat = m_y * cp_l * temp_bulk[i]
 
         # Conduction
-        P_cond_b = K_cond_bulk * ((temp_bulk[i-1]-temp_bulk[i] if i>0 else 0) + (temp_bulk[i+1]-temp_bulk[i] if i<Nx-1 else 0))
+        P_cond_b = K_cond_bulk * ((temp_bulk[i-1]-temp_bulk[i] if i > 0 else 0) + (
+            temp_bulk[i+1]-temp_bulk[i] if i < Nx-1 else 0))
 
-        temp_bulk_new[i] += (dt/capa_bulk_i) * (H_top - H_bot - H_lat + P_cond_b)
+        temp_bulk_new[i] += (dt/capa_bulk_i) * \
+            (H_top - H_bot - H_lat + P_cond_b)
     temp_bulk = temp_bulk_new
     #### INTERFACE VAPEUR-LIQUIDE ####
 
     # On suppose la température à la surface égale à la température de saturation à la pression donnée
     Tint = saturation_temperature(Pv)
 
-    #Tv = Tint   # vapeur en équilibre avec l'interface
+    # Tv = Tint   # vapeur en équilibre avec l'interface
 
     #### VAPEUR ####
 
     # Convection paroi vapeur → vapeur
-    x_vap_mid   = max(H_vap/2.0, dx)
-    beta_v_loc  = 1.0 / Tv      # gaz parfait : beta_v = 1/T
-    a_v_loc     = lam_v / (rho_v * cp_v)
+    x_vap_mid = max(H_vap/2.0, dx)
+    beta_v_loc = 1.0 / Tv      # gaz parfait : beta_v = 1/T
+    a_v_loc = lam_v / (rho_v * cp_v)
     Ra_wv = Rayleigh_x(g, beta_v_loc, Tw_vap, Tv, x_vap_mid, nu_v, a_v_loc)
     k_wall_v = k_nat(Ra_wv, lam_v, x_vap_mid)
     Q_wall_vap = k_wall_v * 2*np.pi*R*H_vap * (Tw_vap - Tv)
 
     # Eq 35,
-    k_v_int = compute_k_v_int(Tv, Tint, D_tank, rho_v, cp_v, nu_v, lam_v, g, beta_v_loc)
-    Q_v_int = k_v_int * A_bulk * (Tv - Tint)    # flux vapeur → interface (>0 si Tv>Tint)
-    dTv_dt  = (Q_wall_vap - Q_v_int) / (m_v * cv_v)
-    Tv_new  = Tv + dTv_dt * dt
+    k_v_int = compute_k_v_int(Tv, Tint, D_tank, rho_v,
+                              cp_v, nu_v, lam_v, g, beta_v_loc)
+    # flux vapeur → interface (>0 si Tv>Tint)
+    Q_v_int = k_v_int * A_bulk * (Tv - Tint)
+    dTv_dt = (Q_wall_vap - Q_v_int) / (m_v * cv_v)
+    Tv_new = Tv + dTv_dt * dt
 
     # Eq 32 , flux à l'interface
-    k_int_l = compute_k_int_l(Tint, Ts, D_tank, rho_l, cp_l, nu_l, lam_l, g, beta_l)
-    q_int_l = k_int_l * (Tint - Ts)    # >0 si Tsat > Ts (condensation → chauffe surface)
+    k_int_l = compute_k_int_l(Tint, Ts, D_tank, rho_l,
+                              cp_l, nu_l, lam_l, g, beta_l)
+    # >0 si Tsat > Ts (condensation → chauffe surface)
+    q_int_l = k_int_l * (Tint - Ts)
 
     # Eq 31 , calcul du m_ph
     # m_ph > 0 : évaporation, m_ph < 0 : condensation
@@ -303,7 +343,7 @@ for it in range(num_iterations):
     drho_dP = (rho_v_sat(Pv+dP_test) - rho_v_sat(Pv-dP_test)) / (2*dP_test)
 
     dH_vap_dt = m_ph / (rho_l * A_bulk)
-    dV_v_dt   = A_bulk * dH_vap_dt
+    dV_v_dt = A_bulk * dH_vap_dt
 
     denom_P = V_v * drho_dP
     if abs(denom_P) > 1e-15:
@@ -313,25 +353,24 @@ for it in range(num_iterations):
 
     Pv_new = max(Pv + dPv_dt * dt, Pv*0.5)
 
-
     # Mise à jour H_vap, V_v, rho_v cohérents avec Pv_new
     H_vap_new = H_vap + dH_vap_dt * dt
     H_vap_new = max(H_vap_new, dx)
-    V_v_new   = A_bulk * H_vap_new
+    V_v_new = A_bulk * H_vap_new
     rho_v_new = rho_v_sat(Pv_new)
-    m_v_new   = rho_v_new * V_v_new
+    m_v_new = rho_v_new * V_v_new
 
     #### SURFACE ####
 
     # Eq. 29 , Surface CV
-    x_s    = H_liq_init - dx/2.0
-    Ra_s   = Rayleigh_x(g, beta_l, Tw[-1], Ts, max(x_s,dx), nu_l, a_l)
-    q_in_s = q_in_wall(Tw[-1], Ts, Ra_s, max(x_s,dx), lam_l)
+    x_s = H_liq_init - dx/2.0
+    Ra_s = Rayleigh_x(g, beta_l, Tw[-1], Ts, max(x_s, dx), nu_l, a_l)
+    q_in_s = q_in_wall(Tw[-1], Ts, Ra_s, max(x_s, dx), lam_l)
 
-    m_n       = m_point_CL[Nx]
+    m_n = m_point_CL[Nx]
     h_n_tilde = cp_l * temp_moy_cl[Nx-1]
-    h_B_n     = cp_l * temp_bulk[Nx-1]
-    dTB_n_dx  = (Ts - temp_bulk[Nx-1]) / dx
+    h_B_n = cp_l * temp_bulk[Nx-1]
+    dTB_n_dx = (Ts - temp_bulk[Nx-1]) / dx
     capa_surf = rho_l * A_bulk * H_s * cp_l
     dHs_dt_liq = m_ph / (rho_l * A_bulk)
 
@@ -343,11 +382,12 @@ for it in range(num_iterations):
 
     Ts_new = Ts + dTs_dt * dt
     # Mise à jour
-    Pv    = Pv_new
-    Tv    = max(Tv_new, Tint)   # Tv ne peut pas descendre sous Tsat, sinon il y a condensation totale
-    Ts    = Ts_new
-    m_v   = m_v_new
-    V_v   = V_v_new
+    Pv = Pv_new
+    # Tv ne peut pas descendre sous Tsat, sinon il y a condensation totale
+    Tv = max(Tv_new, Tint)
+    Ts = Ts_new
+    m_v = m_v_new
+    V_v = V_v_new
     rho_v = rho_v_new
     H_vap = H_vap_new
     #### BILAN DE CONSERVATION D'ÉNERGIE TOTAL ####
@@ -369,7 +409,7 @@ for it in range(num_iterations):
     err_E_rel = (err_E / max(energy_input_total, 1e-6)) * 100
 
     #### ENREGISTREMENT POUR PLOT #####
-    if it % int(10/dt) == 0:
+    if it % int(100/dt) == 0:
         history_temp_bulk.append(np.copy(temp_bulk))
         history_delta.append(np.copy(delta))
         history_Tv.append(Tv)
@@ -377,85 +417,93 @@ for it in range(num_iterations):
         history_Pv.append(Pv/1e3)
         history_m_dot.append(np.copy(m_point_CL[1:]))
         time_stamps.append(int(it*dt))
-        print(f"t={int(it*dt):4d}s | Err_E={err_E_rel:5.3f}% | Pv={Pv/1e3:6.1f} kPa | Tv={Tv:.1f} K | Ts={Ts:.1f} K | TB_ht={temp_bulk[-1]:.1f} K | TB_bs={temp_bulk[0]:.1f} K")
-
-
-
+        print(
+            f"t={int(it*dt):4d}s | Err_E={err_E_rel:5.3f}% | Pv={Pv/1e3:6.1f} kPa | Tv={Tv:.1f} K | Ts={Ts:.1f} K | TB_ht={temp_bulk[-1]:.1f} K | TB_bs={temp_bulk[0]:.1f} K")
 
 
 #### PLOT ####
 
 y_coords = np.linspace(dx/2, H_liq_init-dx/2, Nx)
-colors   = cm.viridis(np.linspace(0, 1, len(history_temp_bulk)))
+colors = cm.viridis(np.linspace(0, 1, len(history_temp_bulk)))
 
 # Stratification thermique
-plt.figure(figsize=(7,5))
+plt.figure(figsize=(7, 5))
 for idx, (t_profile, time) in enumerate(zip(history_temp_bulk, time_stamps)):
     plt.plot(t_profile, y_coords, color=colors[idx], label=f't={time}s')
 plt.xlabel('Température bulk $T_B$ (K)', fontsize=12)
 plt.ylabel('Hauteur depuis le fond (m)', fontsize=12)
 plt.title('Stratification thermique', fontsize=12)
-plt.legend(bbox_to_anchor=(1.05,1), loc='upper left')
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.grid(True, linestyle='--', alpha=0.7)
 plt.tight_layout()
 plt.show()
 
 # Épaisseur couche limite
-plt.figure(figsize=(4,7))
+plt.figure(figsize=(4, 7))
 for idx, (d_profile, time) in enumerate(zip(history_delta, time_stamps)):
     plt.plot(d_profile*1000, y_coords, color=colors[idx], label=f't={time}s')
 plt.xlabel('Épaisseur delta (mm)', fontsize=12)
 plt.ylabel('Hauteur (m)', fontsize=12)
 plt.title("Épaisseur de la couche limite", fontsize=13)
-plt.legend(bbox_to_anchor=(1.05,1), loc='upper left')
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.grid(True, linestyle='--', alpha=0.7)
 plt.tight_layout()
 plt.show()
 
 # Débit massique
-plt.figure(figsize=(7,5))
+plt.figure(figsize=(7, 5))
 for idx, (d_profile, time) in enumerate(zip(history_m_dot, time_stamps)):
     plt.plot(d_profile, y_coords, color=colors[idx], label=f't={time}s')
 plt.xlabel('Débit massique (kg/s))', fontsize=12)
 plt.ylabel('Hauteur (m)', fontsize=12)
 plt.title("Débit dans la couche limite", fontsize=13)
-plt.legend(bbox_to_anchor=(1.05,1), loc='upper left')
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.grid(True, linestyle='--', alpha=0.7)
 plt.tight_layout()
 plt.show()
 
 # Température en paroi
-plt.figure(figsize=(7,5))
+plt.figure(figsize=(7, 5))
 plt.plot(Tw, y_coords, 'r-', lw=2, label='Paroi liquide $T_w$')
-plt.xlabel('Température paroi (K)'); plt.ylabel('Hauteur (m)')
+plt.xlabel('Température paroi (K)')
+plt.ylabel('Hauteur (m)')
 plt.title('Profil de température du mur à $t_{final}$')
-plt.grid(True, linestyle='--', alpha=0.6); plt.legend()
-plt.xlim(min(Tw)-1, max(Tw)+1); plt.tight_layout(); plt.show()
+plt.grid(True, linestyle='--', alpha=0.6)
+plt.legend()
+plt.xlim(min(Tw)-1, max(Tw)+1)
+plt.tight_layout()
+plt.show()
 
 # 4. Dynamique interface — comparaison avec valeurs article
-fig, axes = plt.subplots(1,3, figsize=(15,5))
+fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
 axes[0].plot(time_stamps, history_Tv, 'b-o', ms=3, label='$T_v=T_{sat}(P_v)$')
 axes[0].plot(time_stamps, history_Ts, 'r-s', ms=3, label='$T_s$ surface')
-axes[0].set_xlabel('Temps (s)'); axes[0].set_ylabel('Température (K)')
+axes[0].set_xlabel('Temps (s)')
+axes[0].set_ylabel('Température (K)')
 axes[0].set_title('Températures vapeur et surface')
-axes[0].legend(); axes[0].grid(True, linestyle='--', alpha=0.7)
+axes[0].legend()
+axes[0].grid(True, linestyle='--', alpha=0.7)
 
 # Comparaison pression avec article (Fig 9b : 800 → ~1200 kPa à 1200s)
 axes[1].plot(time_stamps, history_Pv, 'g-o', ms=3, label='Modèle')
-axes[1].set_xlabel('Temps (s)'); axes[1].set_ylabel('Pression (kPa)')
+axes[1].set_xlabel('Temps (s)')
+axes[1].set_ylabel('Pression (kPa)')
 axes[1].set_title('Montée en pression')
-axes[1].legend(); axes[1].grid(True, linestyle='--', alpha=0.7)
+axes[1].legend()
+axes[1].grid(True, linestyle='--', alpha=0.7)
 
-TB_top = [p[-1] for p in history_temp_bulk]
-TB_bot = [p[0]  for p in history_temp_bulk]
-axes[2].plot(time_stamps, TB_top, 'b-',  ms=3, label='$T_{B,top}$')
+TB_top = [p[int(len(p)/2)] for p in history_temp_bulk]
+TB_bot = [p[0] for p in history_temp_bulk]
+axes[2].plot(time_stamps, TB_top, 'b-',  ms=3, label='$T_{B,mid}$')
 axes[2].plot(time_stamps, TB_bot, 'b--', ms=3, label='$T_{B,bot}$')
 axes[2].plot(time_stamps, history_Ts, 'r-', ms=3, label='$T_s$')
 axes[2].plot(time_stamps, history_Tv, 'g-', ms=3, label='$T_v=T_{sat}$')
-axes[2].set_xlabel('Temps (s)'); axes[2].set_ylabel('Température (K)')
+axes[2].set_xlabel('Temps (s)')
+axes[2].set_ylabel('Température (K)')
 axes[2].set_title('Comparaison températures')
-axes[2].legend(); axes[2].grid(True, linestyle='--', alpha=0.7)
+axes[2].legend()
+axes[2].grid(True, linestyle='--', alpha=0.7)
 
 plt.suptitle("Interface vapeur-liquide avec Tv=Tsat(Pv)", fontsize=12)
 plt.tight_layout()
